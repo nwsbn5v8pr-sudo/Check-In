@@ -33,6 +33,7 @@ button:active,.opt:active{transform:scale(.97)}
 .wrap{max-width:1240px;margin:0 auto;padding:max(clamp(16px,3vw,32px),env(safe-area-inset-top)) max(3vw,14px,env(safe-area-inset-right)) max(clamp(16px,3vw,32px),env(safe-area-inset-bottom)) max(3vw,14px,env(safe-area-inset-left))}
 header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
 .ttl{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 h1{font-size:clamp(28px,4vw,40px);line-height:1.05;margin:0;letter-spacing:-.02em;font-weight:700}
 .live{display:inline-flex;align-items:center;gap:7px;background:var(--greenSoft);color:var(--green);font-weight:600;font-size:15px;padding:6px 14px;border-radius:99px}
 .live i{width:9px;height:9px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
@@ -140,7 +141,7 @@ html.ios .fab:active{transform:scale(.98)}
 <body>
 <div class="wrap">
 <header>
-  <div class="ttl"><h1>Check-In</h1><span class="live"><i></i>Live</span>
+  <div class="ttl"><h1 class="sr">Check-In</h1><span class="live"><i></i>Live</span>
     <div class="stats">
       <div class="stat"><b id="sW">0</b><span>Waiting</span></div>
       <div class="stat"><b id="sA">0:00</b><span>Avg Wait</span></div>
