@@ -70,8 +70,17 @@ h2{font-size:24px;margin:0;letter-spacing:-.01em}
 .clr:disabled{opacity:.4;cursor:default}
 .empty{color:var(--sub);text-align:center;padding:90px 10px;font-size:18px}
 ul{list-style:none;margin:0;padding:0}
-li.c{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 0;border-top:1px solid var(--line);animation:in .28s ease}
+li.c{position:relative;overflow:hidden;border-top:1px solid var(--line);animation:in .28s ease}
 li.c:first-child{border-top:0}
+.ci{position:relative;z-index:1;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 0;background:var(--card);touch-action:pan-y;user-select:none;-webkit-user-select:none;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.ci.drag{transition:none}
+.swbg{position:absolute;inset:0;display:flex;align-items:center;gap:8px;padding-left:18px;background:var(--blueSoft);color:var(--blue);font-weight:600;font-size:15px;border-radius:14px;opacity:0;transition:background .15s,color .15s}
+.swbg svg{width:20px;height:20px;transition:transform .15s}
+li.c.sw .swbg{opacity:1}
+li.c.arm .swbg{background:var(--blue);color:#fff}
+li.c.arm .swbg svg{transform:scale(1.2)}
+li.c.moved{animation:pop .45s ease}
+@keyframes pop{0%{background:var(--blueSoft)}100%{background:transparent}}
 .pos{width:44px;height:44px;border-radius:50%;background:var(--blueSoft);color:var(--blue);display:grid;place-items:center;font-weight:700;font-size:15px;letter-spacing:-.02em;white-space:nowrap}
 .pos.none{background:var(--field);color:var(--sub);border:1.5px solid var(--line)}
 .nm{font-weight:600;font-size:17px}
@@ -100,7 +109,7 @@ li.c:first-child{border-top:0}
 /* iPad portrait / Split View */
 @media(min-width:700px) and (max-width:1023px){main{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:16px}
  .row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px}.grid4{grid-template-columns:repeat(3,minmax(0,1fr))}
-li.c{grid-template-columns:36px minmax(0,1fr) auto;gap:10px}.pos{width:36px;height:36px}}
+.ci{grid-template-columns:36px minmax(0,1fr) auto;gap:10px}.pos{width:36px;height:36px}}
 /* iPhone */
 @media(max-width:699px){main{grid-template-columns:minmax(0,1fr)}.empty{padding:50px 10px}
  .go{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:3;box-shadow:0 8px 24px rgba(0,0,0,.18)}
@@ -184,7 +193,7 @@ html.ios .fab:active{transform:scale(.98)}
 <section class="card">
   <div class="qh"><h2>Up Next</h2><button class="clr" id="clr" type="button">Clear All</button></div>
   <ul id="list"></ul>
-  <p class="hint">Customer info is deleted 1 hour after check-in.</p>
+  <p class="hint">Swipe a customer right to move them to the top. Customer info is deleted 1 hour after check-in.</p>
 </section>
 </main>
 </div>
@@ -297,11 +306,12 @@ function render(){
   $("list").innerHTML=queue.map((c,i)=>{
     const col=COLORS.find(x=>x[0]===c.color);
     const wear=[c.color,c.clothing].filter(Boolean).join(" ");
-    return `<li class="c"><div class="pos${c.spot?"":" none"}" title="${c.spot?"Location "+esc(c.spot):"No location"}">${c.spot?esc(c.spot):"–"}</div><div>
+    return `<li class="c${c.id===lastMoved?" moved":""}" data-id="${c.id}"><div class="swbg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>To top</div><div class="ci"><div class="pos${c.spot?"":" none"}" title="${c.spot?"Location "+esc(c.spot):"No location"}">${c.spot?esc(c.spot):"–"}</div><div>
       <div class="nm">${esc(c.name)}</div>
       <div class="meta">${wear?`<span>${col?`<span class="dot" style="background:${col[1]}"></span>`:""}${esc(wear)}</span>`:""}</div>
       <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${c.product}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
-    </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Helped</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></li>`}).join("");
+    </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Helped</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></div></li>`}).join("");
+  lastMoved=null;
   tick();
 }
 function tick(){
@@ -325,6 +335,41 @@ $("f").addEventListener("submit",e=>{
   resetForm();
   if(isIOS())closeSheet();else $("fn").focus();
 });
+// Swipe right on a customer to move them to the top
+let lastMoved=null,sw=null;const ARM=120;
+function moveTop(id){
+  const i=queue.findIndex(x=>x.id===id);if(i<0)return;
+  const [c]=queue.splice(i,1);queue.unshift(c);lastMoved=id;save();render();
+  toast(i===0?`${c.name} is already first`:`${c.name} moved to the top`);
+}
+$("list").addEventListener("pointerdown",e=>{
+  const ci=e.target.closest(".ci");if(!ci||e.target.closest("button")||(e.pointerType==="mouse"&&e.button!==0))return;
+  sw={ci,li:ci.parentElement,x:e.clientX,y:e.clientY,dx:0,on:false,id:e.pointerId};
+});
+$("list").addEventListener("pointermove",e=>{
+  if(!sw||e.pointerId!==sw.id)return;
+  const dx=e.clientX-sw.x,dy=e.clientY-sw.y;
+  if(!sw.on){
+    if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)){sw=null;return}
+    if(dx>10&&dx>Math.abs(dy)){sw.on=true;sw.ci.classList.add("drag");sw.li.classList.add("sw");try{sw.ci.setPointerCapture(e.pointerId)}catch(_){}}
+    else return;
+  }
+  e.preventDefault();
+  sw.dx=Math.max(0,dx<=ARM?dx:ARM+(dx-ARM)*.35);
+  sw.ci.style.transform=`translateX(${sw.dx}px)`;
+  const armed=sw.dx>=ARM;
+  if(armed!==sw.li.classList.contains("arm")){sw.li.classList.toggle("arm",armed);try{if(armed&&navigator.vibrate)navigator.vibrate(8)}catch(_){}}
+},{passive:false});
+function endSwipe(e){
+  if(!sw||e.pointerId!==sw.id)return;
+  const s=sw;sw=null;if(!s.on)return;
+  s.ci.classList.remove("drag");s.ci.style.transform="";
+  const go=s.li.classList.contains("arm");
+  if(go)setTimeout(()=>moveTop(+s.li.dataset.id),180);
+  else setTimeout(()=>s.li.classList.remove("sw"),250);
+}
+$("list").addEventListener("pointerup",endSwipe);
+$("list").addEventListener("pointercancel",endSwipe);
 $("list").addEventListener("click",e=>{
   const s=e.target.closest("[data-i]"),r=e.target.closest("[data-r]");
   const id=s?+s.dataset.i:r?+r.dataset.r:null;if(id===null)return;
