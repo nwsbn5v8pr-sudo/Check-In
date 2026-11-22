@@ -32,7 +32,7 @@ button,select,input,.opt{touch-action:manipulation}
 button:active,.opt:active{transform:scale(.97)}
 .wrap{max-width:1240px;margin:0 auto;padding:max(clamp(16px,3vw,32px),env(safe-area-inset-top)) max(3vw,14px,env(safe-area-inset-right)) max(clamp(16px,3vw,32px),env(safe-area-inset-bottom)) max(3vw,14px,env(safe-area-inset-left))}
 header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
-.ttl{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.ttl{display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex:1 1 auto}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 h1{font-size:clamp(28px,4vw,40px);line-height:1.05;margin:0;letter-spacing:-.02em;font-weight:700}
 .live{display:inline-flex;align-items:center;gap:7px;background:var(--greenSoft);color:var(--green);font-weight:600;font-size:15px;padding:6px 14px;border-radius:99px}
@@ -115,7 +115,7 @@ li.c.moved{animation:pop .45s ease}
 @media(max-width:699px){main{grid-template-columns:minmax(0,1fr)}.empty{padding:50px 10px}
  .go{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:3;box-shadow:0 8px 24px rgba(0,0,0,.18)}
  .grid4{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:520px){.row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.row .prev{grid-column:1/-1;height:44px}.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{width:100%}.stat{flex:1;min-width:0}}
+@media(max-width:520px){.row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.row .prev{grid-column:1/-1;height:44px}.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{flex:1 1 100%;flex-wrap:nowrap}.stat{flex:1 1 0;min-width:0}}
 /* Sheet: desktop keeps the form inline; iOS opens it as a pop-up */
 .sheet,.sheetIn{display:contents}.sh-head,.fab{display:none}
 html.ios main{grid-template-columns:minmax(0,1fr)}
