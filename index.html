@@ -297,7 +297,7 @@ function render(){
       <div class="nm">${esc(c.name)}</div>
       <div class="meta">${wear?`<span>${col?`<span class="dot" style="background:${col[1]}"></span>`:""}${esc(wear)}</span>`:""}</div>
       <div class="tags">${c.product==="Trade-in"||(c.addon!=="Screen protector"&&c.addon!=="Trade-in"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${c.product}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}<span class="tag ${c.pay==="Finance"?"fin":""}">${c.pay}</span></div>
-    </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Help</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></li>`}).join("");
+    </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Helped</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></li>`}).join("");
   tick();
 }
 function tick(){
@@ -326,7 +326,7 @@ $("list").addEventListener("click",e=>{
   const id=s?+s.dataset.i:r?+r.dataset.r:null;if(id===null)return;
   const c=queue.find(x=>x.id===id);
   queue=queue.filter(x=>x.id!==id);save();render();
-  if(s&&c)toast(`Now helping ${c.name}`);
+  if(s&&c)toast(`${c.name} helped`);
 });
 $("clr").addEventListener("click",()=>$("m").classList.add("on"));
 $("mN").addEventListener("click",()=>$("m").classList.remove("on"));
