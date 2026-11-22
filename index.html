@@ -132,6 +132,19 @@ html.ios .sh-head::before{content:"";position:absolute;top:6px;left:50%;width:38
 html.ios .fab{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:62px;border:0;border-radius:18px;background:var(--blue);color:#fff;font:inherit;font-size:19px;font-weight:600;box-shadow:0 10px 30px rgba(0,113,227,.35);cursor:pointer}
 html.ios .go{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:3;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 html.ios .fab:active{transform:scale(.98)}
+.sh-hide{justify-self:end;font:inherit;font-size:17px;font-weight:600;color:var(--blue);background:none;border:0;padding:8px 6px 0;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.sh-hide svg{width:18px;height:18px}
+html.ios .sh-head{cursor:grab;touch-action:none}
+html.ios .sheetIn.drag{animation:none;transition:none}
+html.ios .sheetIn.down{transform:translateY(110%)!important;transition:transform .25s ease-in}
+html.ios .sheet.closing{background:rgba(0,0,0,0);transition:background .25s}
+.mini{display:none}
+html.ios .mini.on{display:flex;align-items:center;gap:12px;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));z-index:7;width:min(560px,calc(100% - 24px));min-height:64px;padding:10px 10px 10px 16px;border:0;border-radius:18px;background:var(--card);color:var(--ink);font:inherit;text-align:left;box-shadow:0 10px 34px rgba(0,0,0,.22),0 0 0 1px var(--line);cursor:pointer;animation:up .3s cubic-bezier(.2,.8,.2,1)}
+.mini .mi-t{flex:1;min-width:0}.mini b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini small{color:var(--sub);font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .mi-go{flex:none;background:var(--blue);color:#fff;font-weight:600;font-size:15px;border-radius:12px;padding:0 14px;height:44px;display:inline-flex;align-items:center;gap:6px}
+.mini .mi-go svg{width:16px;height:16px}
+html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 .fab svg{width:22px;height:22px}
 @media(min-width:700px){html.ios .sheet{align-items:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom))}html.ios .sheetIn{border-radius:22px;max-height:92dvh}html.ios .sh-head::before{display:none}html.ios .sh-head b{padding-top:0}html.ios .sh-x{padding-top:0}}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}@keyframes fade{from{opacity:0}}
@@ -153,7 +166,7 @@ html.ios .fab:active{transform:scale(.98)}
 <main>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="shT">
 <div class="sheetIn">
-<div class="sh-head"><button type="button" class="sh-x" id="shX">Cancel</button><b id="shT">New Check-In</b><span></span></div>
+<div class="sh-head" id="shHead"><button type="button" class="sh-x" id="shX">Cancel</button><b id="shT">New Check-In</b><button type="button" class="sh-hide" id="shHide" aria-label="Hide and keep this check-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>Hide</button></div>
 <form class="card" id="f" autocomplete="off">
   <div class="row two">
     <div><label class="l" for="fn">Name</label><input id="fn" placeholder="First name" maxlength="24" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="next"></div>
@@ -191,6 +204,7 @@ html.ios .fab:active{transform:scale(.98)}
 </div>
 
 <button class="fab" id="fab" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+<button class="mini" id="mini" type="button" aria-label="Continue this check-in"><span class="mi-t"><b id="miN">New check-in</b><small id="miS">In progress</small></span><span class="mi-go">Continue<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></span></button>
 <section class="card">
   <div class="qh"><h2>Up Next</h2><button class="clr" id="clr" type="button">Clear All</button></div>
   <ul id="list"></ul>
@@ -290,12 +304,42 @@ $("f").addEventListener("click",e=>{
 $("fn").addEventListener("input",sync);
 const isIOS=()=>document.documentElement.classList.contains("ios");
 function resetForm(){$("f").reset();state={product:"",addon:"",pay:""};steps();preview();sync()}
-function openSheet(){$("sheet").classList.add("on");document.body.style.overflow="hidden";$("sheet").querySelector(".sheetIn").scrollTop=0;setTimeout(()=>$("fn").focus(),50)}
-function closeSheet(){$("sheet").classList.remove("on");document.body.style.overflow="";document.activeElement?.blur()}
+const sIn=$("sheet").querySelector(".sheetIn");
+const hasDraft=()=>!!($("fn").value.trim()||$("li").value.trim()||$("col").value||$("clo").value||$("loc").value||$("num").value||state.product);
+function showMini(){
+  const on=isIOS()&&hasDraft()&&!$("sheet").classList.contains("on");
+  $("mini").classList.toggle("on",on);document.documentElement.classList.toggle("has-mini",on);
+  if(!on)return;
+  const nm=$("fn").value.trim();$("miN").textContent=nm?`Adding ${nm}`:"New check-in";
+  const spot=$("loc").value?$("loc").value+$("num").value:"";
+  $("miS").textContent=[state.product,state.addon&&state.addon!=="None"?"+ "+state.addon:"",state.pay,spot].filter(Boolean).join(" · ")||"In progress";
+}
+function openSheet(){
+  const fresh=!hasDraft();
+  $("sheet").classList.remove("closing");sIn.classList.remove("down","drag");sIn.style.transform="";
+  $("sheet").classList.add("on");document.body.style.overflow="hidden";showMini();
+  if(fresh){sIn.scrollTop=0;setTimeout(()=>$("fn").focus(),50)}
+}
+function closeSheet(){$("sheet").classList.remove("on","closing");sIn.classList.remove("down","drag");sIn.style.transform="";document.body.style.overflow="";document.activeElement?.blur();showMini()}
+// Hide keeps everything typed so far; Cancel throws it away
+function hideSheet(){
+  if(!$("sheet").classList.contains("on"))return;
+  document.activeElement?.blur();
+  $("sheet").classList.add("closing");sIn.classList.add("down");
+  setTimeout(closeSheet,240);
+}
 $("fab").addEventListener("click",openSheet);
-$("shX").addEventListener("click",()=>{closeSheet();resetForm()});
-$("sheet").addEventListener("click",e=>{if(isIOS()&&e.target.id==="sheet"){closeSheet();resetForm()}});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("sheet").classList.contains("on")){closeSheet();resetForm()}});
+$("mini").addEventListener("click",openSheet);
+$("shHide").addEventListener("click",hideSheet);
+$("shX").addEventListener("click",()=>{resetForm();closeSheet()});
+$("sheet").addEventListener("click",e=>{if(isIOS()&&e.target.id==="sheet")hideSheet()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("sheet").classList.contains("on"))hideSheet()});
+// Drag the top of the sheet down to tuck it away
+let pull=null;
+$("shHead").addEventListener("pointerdown",e=>{if(!isIOS()||e.target.closest("button"))return;pull={y:e.clientY,dy:0,id:e.pointerId};sIn.classList.add("drag");try{$("shHead").setPointerCapture(e.pointerId)}catch(_){}});
+$("shHead").addEventListener("pointermove",e=>{if(!pull||e.pointerId!==pull.id)return;pull.dy=Math.max(0,e.clientY-pull.y);sIn.style.transform=`translateY(${pull.dy}px)`});
+function endPull(e){if(!pull||e.pointerId!==pull.id)return;const d=pull.dy;pull=null;sIn.classList.remove("drag");if(d>90)hideSheet();else sIn.style.transform=""}
+$("shHead").addEventListener("pointerup",endPull);$("shHead").addEventListener("pointercancel",endPull);
 
 const fmt=ms=>{const s=Math.max(0,Math.floor(ms/1000));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`:`${m}:${String(r).padStart(2,"0")}`};
 const esc=s=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -334,6 +378,7 @@ $("f").addEventListener("submit",e=>{
   toast(`${name} checked in`);
   resetForm();
   if(isIOS())closeSheet();else $("fn").focus();
+  showMini();
 });
 // Swipe right on a customer to move them to the top
 let lastMoved=null,sw=null;const ARM=120;
