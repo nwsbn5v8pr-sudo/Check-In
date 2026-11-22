@@ -1,6 +1,6 @@
 {
-  "name": "Check-In",
-  "short_name": "Check-In",
+  "name": "Up Next",
+  "short_name": "Up Next",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
