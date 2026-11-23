@@ -15,3 +15,9 @@ Each customer is deleted automatically **1 hour after check-in** (or immediately
 
 1. Open the GitHub Pages link in **Safari**.
 2. Tap **Share → Add to Home Screen → Add**.
+
+## Products
+
+Only **iPhone** and **Trade-in** are shown right now. iPad, Mac, Apple Watch, Apple Home and Accessories are still saved in `index.html` with all their steps — to bring any back, add its name to the `ACTIVE` list near the top of the script.
+
+iPhone models: DUO, 18 Pro, 18 Pro Max, Air, 17, 17e, 16 (edit the `MODELS` list to change them).

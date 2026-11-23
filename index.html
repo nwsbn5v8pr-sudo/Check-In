@@ -57,6 +57,9 @@ input:focus,select:focus,button:focus-visible{outline:3px solid var(--blue);outl
 .section{margin-top:6px;animation:in .28s ease}
 @keyframes in{from{opacity:0;transform:translateY(6px)}}
 .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
+.chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:20px}
+.chips .opt{padding:12px 6px;min-height:52px;justify-content:center}
+@media(max-width:520px){.chips{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:20px}
 .opt{font:inherit;color:var(--ink);background:var(--field);border:1.5px solid var(--line);border-radius:16px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:44px;transition:border-color .15s,background .15s}
 .opt svg{width:38px;height:38px;color:var(--ink)}
@@ -185,7 +188,12 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
   </div>
 
   <span class="q">What are they looking for?</span>
-  <div class="grid4" id="prod" role="group" aria-label="Product"></div>
+  <div class="grid2" id="prod" role="group" aria-label="Product"></div>
+
+  <div id="modS" hidden class="section">
+    <span class="q">Which iPhone?</span>
+    <div class="chips" id="model" role="group" aria-label="iPhone model"></div>
+  </div>
 
   <div id="addS" hidden class="section">
     <span class="q" id="addQ">Trading in a device?</span>
@@ -227,6 +235,10 @@ const COLORS=[["Black","#1d1d1f"],["White","#ffffff"],["Gray","#8e8e93"],["Navy"
 const CLOTHES=["T-shirt","Shirt","Hoodie","Sweater","Jacket","Dress","Hat"];
 const LOCS=[["A","A"],["B","B"],["C","C"],["GB","GB"]];
 const SV=p=>`<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+// Products shown on "What are they looking for?". The others stay saved
+// in PRODUCTS below — add their names here to bring them back.
+const ACTIVE=["iPhone","Trade-in"];
+const MODELS=["DUO","18 Pro","18 Pro Max","Air","17","17e","16"];
 const PRODUCTS=[
  {id:"iPhone",ic:SV('<rect x="12" y="3" width="16" height="34" rx="4"/><path d="M17.5 7h5"/>')},
  {id:"iPad",ic:SV('<rect x="7" y="4" width="26" height="32" rx="3.5"/><circle cx="20" cy="32" r=".6" fill="currentColor"/>')},
@@ -249,7 +261,7 @@ const isAcc=()=>state.product==="Accessories";
 const noPay=()=>state.product==="Apple Home";
 const noAdd=()=>["Trade-in","Apple Home","Accessories"].includes(state.product);
 
-let state={product:"",addon:"",pay:""};
+let state={product:"",model:"",addon:"",pay:""};
 let queue=[];
 try{queue=JSON.parse(localStorage.getItem("ci-queue")||"[]")}catch(e){}
 // Privacy: customer info is deleted 1 hour after check-in
@@ -265,7 +277,9 @@ $("loc").innerHTML+=LOCS.map(([n,c])=>`<option value="${c}">${n}</option>`).join
 $("num").innerHTML+=Array.from({length:6},(_,i)=>`<option>${i+1}</option>`).join("");
 
 const opt=(o,grp)=>`<button type="button" class="opt" data-g="${grp}" data-v="${o.id}" aria-pressed="false">${o.ic}<b>${o.id}</b>${o.sub?`<small>${o.sub}</small>`:""}</button>`;
-$("prod").innerHTML=PRODUCTS.map(o=>opt(o,"product")).join("");
+$("prod").innerHTML=PRODUCTS.filter(o=>ACTIVE.includes(o.id)).map(o=>opt(o,"product")).join("");
+$("model").innerHTML=MODELS.map(m=>opt({id:m,ic:""},"model")).join("");
+const needsModel=()=>state.product==="iPhone";
 function steps(){
   const t=isTrade(),ip=state.product==="iPhone";
   $("addQ").textContent="Trading in a device?";
@@ -283,27 +297,30 @@ function preview(){
 }
 function sync(){
   document.querySelectorAll(".opt").forEach(b=>b.setAttribute("aria-pressed",state[b.dataset.g]===b.dataset.v));
-  $("addS").hidden=!state.product||noAdd();
+  $("modS").hidden=!needsModel();
+  $("addS").hidden=!state.product||noAdd()||(needsModel()&&!state.model);
   $("payS").hidden=noPay()||!(state.addon||(state.product&&noAdd()));
   const name=$("fn").value.trim();
-  const ok=name&&state.product&&(noPay()||((state.addon||noAdd())&&state.pay));
+  const ok=name&&state.product&&(!needsModel()||state.model)&&(noPay()||((state.addon||noAdd())&&state.pay));
   $("go").disabled=!ok;
-  $("hint").textContent=ok?"Ready to check in":!name?"Add a first name":!state.product?"Choose a product":(!state.addon&&!noAdd())?"Choose trade-in or none":isTrade()?"Choose stand alone or previous purchase":isAcc()?"Choose AirPods Try On or Other":"Choose how they’ll pay";
+  $("hint").textContent=ok?"Ready to check in":!name?"Add a first name":!state.product?"Choose a product":(needsModel()&&!state.model)?"Choose an iPhone model":(!state.addon&&!noAdd())?"Choose trade-in or none":isTrade()?"Choose stand alone or previous purchase":isAcc()?"Choose AirPods Try On or Other":"Choose how they’ll pay";
 }
 $("f").addEventListener("click",e=>{
   const b=e.target.closest(".opt");if(!b)return;
   const g=b.dataset.g;
   state[g]=state[g]===b.dataset.v?"":b.dataset.v;
-  if(g==="product"){state.addon="";state.pay="";steps()}
+  if(g==="product"){state.model="";state.addon="";state.pay="";steps()}
+  if(g==="model"&&!state.model){state.addon="";state.pay=""}
   if(g==="addon"&&!state.addon)state.pay="";
   sync();
-  if(g==="product"&&state.product&&!noPay())$(noAdd()?"payS":"addS").scrollIntoView({behavior:"smooth",block:"nearest"});
+  if(g==="product"&&state.product&&!noPay())$(needsModel()?"modS":noAdd()?"payS":"addS").scrollIntoView({behavior:"smooth",block:"nearest"});
+  if(g==="model"&&state.model)$("addS").scrollIntoView({behavior:"smooth",block:"nearest"});
   if(g==="addon"&&state.addon)$("payS").scrollIntoView({behavior:"smooth",block:"nearest"});
 });
 ["col","clo","loc","num"].forEach(id=>$(id).addEventListener("change",preview));
 $("fn").addEventListener("input",sync);
 const isIOS=()=>document.documentElement.classList.contains("ios");
-function resetForm(){$("f").reset();state={product:"",addon:"",pay:""};steps();preview();sync()}
+function resetForm(){$("f").reset();state={product:"",model:"",addon:"",pay:""};steps();preview();sync()}
 const sIn=$("sheet").querySelector(".sheetIn");
 const hasDraft=()=>!!($("fn").value.trim()||$("li").value.trim()||$("col").value||$("clo").value||$("loc").value||$("num").value||state.product);
 function showMini(){
@@ -312,7 +329,7 @@ function showMini(){
   if(!on)return;
   const nm=$("fn").value.trim();$("miN").textContent=nm?`Adding ${nm}`:"New check-in";
   const spot=$("loc").value?$("loc").value+$("num").value:"";
-  $("miS").textContent=[state.product,state.addon&&state.addon!=="None"?"+ "+state.addon:"",state.pay,spot].filter(Boolean).join(" · ")||"In progress";
+  $("miS").textContent=[state.model?state.product+" "+state.model:state.product,state.addon&&state.addon!=="None"?"+ "+state.addon:"",state.pay,spot].filter(Boolean).join(" · ")||"In progress";
 }
 function openSheet(){
   const fresh=!hasDraft();
@@ -353,7 +370,7 @@ function render(){
     return `<li class="c${c.id===lastMoved?" moved":""}" data-id="${c.id}"><div class="swbg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>To top</div><div class="ci"><div class="pos${c.spot?"":" none"}" title="${c.spot?"Location "+esc(c.spot):"No location"}">${c.spot?esc(c.spot):"–"}</div><div>
       <div class="nm">${esc(c.name)}</div>
       <div class="meta">${wear?`<span>${col?`<span class="dot" style="background:${col[1]}"></span>`:""}${esc(wear)}</span>`:""}</div>
-      <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${c.product}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
+      <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${c.model?c.product+" "+esc(c.model):c.product}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
     </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Helped</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></div></li>`}).join("");
   lastMoved=null;
   tick();
@@ -373,7 +390,7 @@ $("f").addEventListener("submit",e=>{
   const name=$("fn").value.trim()+($("li").value.trim()?" "+$("li").value.trim().toUpperCase().replace(/\.?$/,"."):"");
   const l=$("loc").value,n=$("num").value;
   const locName=(LOCS.find(x=>x[1]===l)||[""])[0];
-  queue.push({id:Date.now()+Math.random(),t:Date.now(),name,color:$("col").value,clothing:$("clo").value,spot:l?l+n:"",product:state.product,addon:noAdd()?"":state.addon,pay:noPay()?"":state.pay});
+  queue.push({id:Date.now()+Math.random(),t:Date.now(),name,color:$("col").value,clothing:$("clo").value,spot:l?l+n:"",product:state.product,model:needsModel()?state.model:"",addon:noAdd()?"":state.addon,pay:noPay()?"":state.pay});
   save();render();
   toast(`${name} checked in`);
   resetForm();
