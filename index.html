@@ -57,6 +57,7 @@ input:focus,select:focus,button:focus-visible{outline:3px solid var(--blue);outl
 .section{margin-top:6px;animation:in .28s ease}
 @keyframes in{from{opacity:0;transform:translateY(6px)}}
 .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px}
 .chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:20px}
 .chips .opt{padding:12px 6px;min-height:52px;justify-content:center}
 @media(max-width:520px){.chips{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -199,11 +200,16 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
   </div>
 
   <span class="q">What are they looking for?</span>
-  <div class="grid2" id="prod" role="group" aria-label="Product"></div>
+  <div class="grid3" id="prod" role="group" aria-label="Product"></div>
 
   <div id="modS" hidden class="section">
-    <span class="q">Which iPhone?</span>
+    <span class="q" id="modQ">Which iPhone?</span>
     <div class="chips" id="model" role="group" aria-label="iPhone model"></div>
+  </div>
+
+  <div id="mod2S" hidden class="section">
+    <span class="q">Second iPhone</span>
+    <div class="chips" id="model2" role="group" aria-label="Second iPhone model"></div>
   </div>
 
   <div id="addS" hidden class="section">
@@ -257,7 +263,7 @@ const LOCS=[["A","A"],["B","B"],["C","C"],["GB","GB"]];
 const SV=p=>`<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 // Products shown on "What are they looking for?". The others stay saved
 // in PRODUCTS below — add their names here to bring them back.
-const ACTIVE=["iPhone","Trade-in"];
+const ACTIVE=["iPhone","Multiple","Trade-in"];
 const MODELS=["DUO","18 Pro","18 Pro Max","Air","17","17e","16"];
 const PRODUCTS=[
  {id:"iPhone",ic:SV('<rect x="12" y="3" width="16" height="34" rx="4"/><path d="M17.5 7h5"/>')},
@@ -266,6 +272,7 @@ const PRODUCTS=[
  {id:"Apple Watch",ic:SV('<rect x="11" y="10" width="18" height="20" rx="5"/><path d="M14 10l1-6h10l1 6M14 30l1 6h10l1-6"/>')},
  {id:"Apple Home",ic:SV('<path d="M5 19L20 6l15 13"/><path d="M9 16v18h22V16"/><rect x="16" y="23" width="8" height="11" rx="1"/>')},
  {id:"Accessories",ic:SV('<path d="M8 24v-4a12 12 0 0 1 24 0v4"/><rect x="6" y="24" width="7" height="10" rx="2.5"/><rect x="27" y="24" width="7" height="10" rx="2.5"/>')},
+ {id:"Multiple",ic:SV('<rect x="5" y="7" width="14" height="28" rx="3.5"/><rect x="21" y="5" width="14" height="28" rx="3.5"/><path d="M10 10.5h4M26 8.5h4"/>')},
  {id:"Trade-in",ic:SV('<path d="M8 15a13 13 0 0 1 23-4l2 3M32 25a13 13 0 0 1-23 4l-2-3"/><path d="M33 7v7h-7M7 33v-7h7"/>')}];
 const NONE={id:"None",sub:"No add-on",ic:SV('<circle cx="20" cy="20" r="13"/><path d="M11 29L29 11"/>')};
 const ADD_IPHONE=[{id:"Screen protector",sub:"Add to purchase",ic:SV('<rect x="11" y="4" width="18" height="32" rx="4"/><path d="M15 10l10 10M15 17l7 7"/>')},NONE];
@@ -281,7 +288,7 @@ const isAcc=()=>state.product==="Accessories";
 const noPay=()=>state.product==="Apple Home";
 const noAdd=()=>["Trade-in","Apple Home","Accessories"].includes(state.product);
 
-let state={product:"",model:"",addon:"",pay:""};
+let state={product:"",model:"",model2:"",addon:"",pay:""};
 let queue=[];
 try{queue=JSON.parse(localStorage.getItem("ci-queue")||"[]")}catch(e){}
 // Privacy: customer info is deleted 1 hour after check-in
@@ -297,9 +304,14 @@ $("loc").innerHTML+=LOCS.map(([n,c])=>`<option value="${c}">${n}</option>`).join
 $("num").innerHTML+=Array.from({length:6},(_,i)=>`<option>${i+1}</option>`).join("");
 
 const opt=(o,grp)=>`<button type="button" class="opt" data-g="${grp}" data-v="${o.id}" aria-pressed="false">${o.ic}<b>${o.id}</b>${o.sub?`<small>${o.sub}</small>`:""}</button>`;
-$("prod").innerHTML=PRODUCTS.filter(o=>ACTIVE.includes(o.id)).map(o=>opt(o,"product")).join("");
+$("prod").innerHTML=ACTIVE.map(id=>PRODUCTS.find(o=>o.id===id)).filter(Boolean).map(o=>opt(o,"product")).join("");
 $("model").innerHTML=MODELS.map(m=>opt({id:m,ic:""},"model")).join("");
-const needsModel=()=>state.product==="iPhone";
+$("model2").innerHTML=MODELS.map(m=>opt({id:m,ic:""},"model2")).join("");
+const isMulti=()=>state.product==="Multiple";
+const needsModel=()=>state.product==="iPhone"||isMulti();
+const modelsDone=()=>!needsModel()||(state.model&&(!isMulti()||state.model2));
+// "iPhone 17" · "iPhone 18 Pro + iPhone 17" · "2× iPhone 17"
+const phoneLabel=(prod,m1,m2)=>prod==="Multiple"?(m1&&m1===m2?`2× iPhone ${m1}`:[m1,m2].filter(Boolean).map(m=>"iPhone "+m).join(" + ")||"2 iPhones"):m1?prod+" "+m1:prod;
 function steps(){
   const t=isTrade(),ip=state.product==="iPhone";
   $("addQ").textContent="Trading in a device?";
@@ -318,29 +330,33 @@ function preview(){
 function sync(){
   document.querySelectorAll(".opt").forEach(b=>b.setAttribute("aria-pressed",state[b.dataset.g]===b.dataset.v));
   $("modS").hidden=!needsModel();
-  $("addS").hidden=!state.product||noAdd()||(needsModel()&&!state.model);
+  $("modQ").textContent=isMulti()?"First iPhone":"Which iPhone?";
+  $("mod2S").hidden=!isMulti()||!state.model;
+  $("addS").hidden=!state.product||noAdd()||!modelsDone();
   $("payS").hidden=noPay()||!(state.addon||(state.product&&noAdd()));
   const name=$("fn").value.trim();
-  const ok=name&&state.product&&(!needsModel()||state.model)&&(noPay()||((state.addon||noAdd())&&state.pay));
+  const ok=name&&state.product&&modelsDone()&&(noPay()||((state.addon||noAdd())&&state.pay));
   $("go").disabled=!ok;
-  $("hint").textContent=ok?"Ready to check in":!name?"Add a first name":!state.product?"Choose a product":(needsModel()&&!state.model)?"Choose an iPhone model":(!state.addon&&!noAdd())?"Choose trade-in or none":isTrade()?"Choose stand alone or previous purchase":isAcc()?"Choose AirPods Try On or Other":"Choose how they’ll pay";
+  $("hint").textContent=ok?"Ready to check in":!name?"Add a first name":!state.product?"Choose a product":(needsModel()&&!state.model)?(isMulti()?"Choose the first iPhone":"Choose an iPhone model"):(isMulti()&&!state.model2)?"Choose the second iPhone":(!state.addon&&!noAdd())?"Choose trade-in or none":isTrade()?"Choose stand alone or previous purchase":isAcc()?"Choose AirPods Try On or Other":"Choose how they’ll pay";
 }
 $("f").addEventListener("click",e=>{
   const b=e.target.closest(".opt");if(!b)return;
   const g=b.dataset.g;
   state[g]=state[g]===b.dataset.v?"":b.dataset.v;
-  if(g==="product"){state.model="";state.addon="";state.pay="";steps()}
-  if(g==="model"&&!state.model){state.addon="";state.pay=""}
+  if(g==="product"){state.model="";state.model2="";state.addon="";state.pay="";steps()}
+  if(g==="model"&&!state.model){state.model2="";state.addon="";state.pay=""}
+  if(g==="model2"&&!state.model2){state.addon="";state.pay=""}
   if(g==="addon"&&!state.addon)state.pay="";
   sync();
   if(g==="product"&&state.product&&!noPay())$(needsModel()?"modS":noAdd()?"payS":"addS").scrollIntoView({behavior:"smooth",block:"nearest"});
-  if(g==="model"&&state.model)$("addS").scrollIntoView({behavior:"smooth",block:"nearest"});
+  if(g==="model"&&state.model)$(isMulti()?"mod2S":"addS").scrollIntoView({behavior:"smooth",block:"nearest"});
+  if(g==="model2"&&state.model2)$("addS").scrollIntoView({behavior:"smooth",block:"nearest"});
   if(g==="addon"&&state.addon)$("payS").scrollIntoView({behavior:"smooth",block:"nearest"});
 });
 ["col","clo","loc","num"].forEach(id=>$(id).addEventListener("change",preview));
 $("fn").addEventListener("input",sync);
 const isIOS=()=>document.documentElement.classList.contains("ios");
-function resetForm(){$("f").reset();state={product:"",model:"",addon:"",pay:""};steps();preview();sync()}
+function resetForm(){$("f").reset();state={product:"",model:"",model2:"",addon:"",pay:""};steps();preview();sync()}
 const sIn=$("sheet").querySelector(".sheetIn");
 const hasDraft=()=>!!($("fn").value.trim()||$("li").value.trim()||$("col").value||$("clo").value||$("loc").value||$("num").value||state.product);
 function showMini(){
@@ -349,7 +365,7 @@ function showMini(){
   if(!on)return;
   const nm=$("fn").value.trim();$("miN").textContent=nm?`Adding ${nm}`:"New check-in";
   const spot=$("loc").value?$("loc").value+$("num").value:"";
-  $("miS").textContent=[state.model?state.product+" "+state.model:state.product,state.addon&&state.addon!=="None"?"+ "+state.addon:"",state.pay,spot].filter(Boolean).join(" · ")||"In progress";
+  $("miS").textContent=[phoneLabel(state.product,state.model,state.model2),state.addon&&state.addon!=="None"?"+ "+state.addon:"",state.pay,spot].filter(Boolean).join(" · ")||"In progress";
 }
 function openSheet(){
   const fresh=!hasDraft();
@@ -390,7 +406,7 @@ function render(){
     return `<li class="c${c.id===lastMoved?" moved":""}" data-id="${c.id}"><div class="swbg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>To top</div><div class="ci"><button type="button" class="pos${c.spot?"":" none"}" data-loc="${c.id}" aria-label="${c.spot?"Location "+esc(c.spot)+", tap to change":"Add a location"}">${c.spot?esc(c.spot):"–"}</button><div>
       <div class="nm">${esc(c.name)}</div>
       <div class="meta">${wear?`<span>${col?`<span class="dot" style="background:${col[1]}"></span>`:""}${esc(wear)}</span>`:""}</div>
-      <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${c.model?c.product+" "+esc(c.model):c.product}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Ways to Pay"||c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
+      <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${esc(phoneLabel(c.product,c.model,c.model2))}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Ways to Pay"||c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
     </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Helped</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></div></li>`}).join("");
   lastMoved=null;
   tick();
@@ -410,7 +426,7 @@ $("f").addEventListener("submit",e=>{
   const name=$("fn").value.trim()+($("li").value.trim()?" "+$("li").value.trim().toUpperCase().replace(/\.?$/,"."):"");
   const l=$("loc").value,n=$("num").value;
   const locName=(LOCS.find(x=>x[1]===l)||[""])[0];
-  queue.push({id:Date.now()+Math.random(),t:Date.now(),name,color:$("col").value,clothing:$("clo").value,spot:l?l+n:"",product:state.product,model:needsModel()?state.model:"",addon:noAdd()?"":state.addon,pay:noPay()?"":state.pay});
+  queue.push({id:Date.now()+Math.random(),t:Date.now(),name,color:$("col").value,clothing:$("clo").value,spot:l?l+n:"",product:state.product,model:needsModel()?state.model:"",model2:isMulti()?state.model2:"",addon:noAdd()?"":state.addon,pay:noPay()?"":state.pay});
   save();render();
   toast(`${name} checked in`);
   resetForm();
