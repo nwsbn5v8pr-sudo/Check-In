@@ -88,6 +88,17 @@ li.c.moved{animation:pop .45s ease}
 @keyframes pop{0%{background:var(--blueSoft)}100%{background:transparent}}
 .pos{width:44px;height:44px;border-radius:50%;background:var(--blueSoft);color:var(--blue);display:grid;place-items:center;font-weight:700;font-size:15px;letter-spacing:-.02em;white-space:nowrap}
 .pos.none{background:var(--field);color:var(--sub);border:1.5px solid var(--line)}
+button.pos{font:inherit;font-weight:700;border:0;cursor:pointer;padding:0;position:relative}
+button.pos::after{content:"";position:absolute;right:-1px;bottom:-1px;width:15px;height:15px;border-radius:50%;background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3C/svg%3E") center/9px no-repeat;box-shadow:0 0 0 1.5px var(--line)}
+.lbox{max-width:380px;text-align:left}
+.lbox h3{text-align:center}.lbox p{text-align:center}
+.lbox .lq{font-weight:600;font-size:14px;color:var(--sub);margin:0 0 8px}
+.lchips{display:grid;gap:8px;margin-bottom:16px}
+.lchips.l4{grid-template-columns:repeat(4,minmax(0,1fr))}.lchips.l6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.box .lchips button{height:48px;border-radius:12px;border:1.5px solid var(--line);background:var(--field);color:var(--ink);font:inherit;font-weight:600;font-size:17px;cursor:pointer;padding:0}
+.box .lchips button[aria-pressed=true]{border-color:var(--blue);background:var(--blueSoft);color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
+.lnow{text-align:center;font-size:34px;font-weight:700;color:var(--blue);margin:2px 0 14px;font-variant-numeric:tabular-nums}
+.lclear{display:block;margin:-4px auto 14px;font:inherit;font-size:15px;color:var(--red);background:none;border:0;cursor:pointer;min-height:36px}
 .nm{font-weight:600;font-size:17px}
 .meta{color:var(--sub);font-size:14px;display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
@@ -224,6 +235,15 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
 <div class="modal" id="m" role="dialog" aria-modal="true" aria-labelledby="mt">
   <div class="box"><h3 id="mt">Clear Up Next?</h3><p>Everyone in line will be removed.</p>
     <div class="b"><button id="mN" style="background:var(--field);color:var(--ink)">Cancel</button><button id="mY" style="background:var(--red);color:#fff">Clear All</button></div>
+  </div>
+</div>
+<div class="modal" id="lm" role="dialog" aria-modal="true" aria-labelledby="lt">
+  <div class="box lbox"><h3 id="lt">Change location</h3><p id="lsub">Pick a new spot</p>
+    <div class="lnow" id="lnow">--</div>
+    <div class="lq">Location</div><div class="lchips l4" id="lL"></div>
+    <div class="lq">Number</div><div class="lchips l6" id="lN"></div>
+    <button type="button" class="lclear" id="lX">Remove location</button>
+    <div class="b"><button id="lC" type="button" style="background:var(--field);color:var(--ink)">Cancel</button><button id="lS" type="button" style="background:var(--blue);color:#fff">Save</button></div>
   </div>
 </div>
 <div class="toast" id="t"></div>
@@ -367,7 +387,7 @@ function render(){
   $("list").innerHTML=queue.map((c,i)=>{
     const col=COLORS.find(x=>x[0]===c.color);
     const wear=[c.color,c.clothing].filter(Boolean).join(" ");
-    return `<li class="c${c.id===lastMoved?" moved":""}" data-id="${c.id}"><div class="swbg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>To top</div><div class="ci"><div class="pos${c.spot?"":" none"}" title="${c.spot?"Location "+esc(c.spot):"No location"}">${c.spot?esc(c.spot):"–"}</div><div>
+    return `<li class="c${c.id===lastMoved?" moved":""}" data-id="${c.id}"><div class="swbg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>To top</div><div class="ci"><button type="button" class="pos${c.spot?"":" none"}" data-loc="${c.id}" aria-label="${c.spot?"Location "+esc(c.spot)+", tap to change":"Add a location"}">${c.spot?esc(c.spot):"–"}</button><div>
       <div class="nm">${esc(c.name)}</div>
       <div class="meta">${wear?`<span>${col?`<span class="dot" style="background:${col[1]}"></span>`:""}${esc(wear)}</span>`:""}</div>
       <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${c.model?c.product+" "+esc(c.model):c.product}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Ways to Pay"||c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
@@ -432,7 +452,35 @@ function endSwipe(e){
 }
 $("list").addEventListener("pointerup",endSwipe);
 $("list").addEventListener("pointercancel",endSwipe);
+// Tap the location circle to change it
+let le=null;
+function lPaint(){
+  $("lL").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===le.l));
+  $("lN").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===le.n));
+  $("lnow").textContent=le.l?le.l+(le.n||""):"--";
+}
+$("lL").innerHTML=LOCS.map(([,c])=>`<button type="button" data-v="${c}">${c}</button>`).join("");
+$("lN").innerHTML=Array.from({length:6},(_,i)=>`<button type="button" data-v="${i+1}">${i+1}</button>`).join("");
+function openLoc(id){
+  const c=queue.find(x=>x.id===id);if(!c)return;
+  const m=(c.spot||"").match(/^([A-Z]+)(\d*)$/)||[];
+  le={id,l:m[1]||"",n:m[2]||""};
+  $("lsub").textContent=`For ${c.name}`;lPaint();$("lm").classList.add("on");
+}
+const closeLoc=()=>{$("lm").classList.remove("on");le=null};
+$("lL").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;le.l=le.l===b.dataset.v?"":b.dataset.v;lPaint()});
+$("lN").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;le.n=le.n===b.dataset.v?"":b.dataset.v;if(le.n&&!le.l)le.l=LOCS[0][1];lPaint()});
+$("lX").addEventListener("click",()=>{le.l="";le.n="";lPaint()});
+$("lC").addEventListener("click",closeLoc);
+$("lm").addEventListener("click",e=>{if(e.target.id==="lm")closeLoc()});
+$("lS").addEventListener("click",()=>{
+  const c=queue.find(x=>x.id===le.id);
+  if(c){const old=c.spot;c.spot=le.l?le.l+le.n:"";save();render();if(old!==c.spot)toast(c.spot?`${c.name} moved to ${c.spot}`:`Location removed for ${c.name}`)}
+  closeLoc();
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&le)closeLoc()});
 $("list").addEventListener("click",e=>{
+  const lb=e.target.closest("[data-loc]");if(lb){openLoc(+lb.dataset.loc);return}
   const s=e.target.closest("[data-i]"),r=e.target.closest("[data-r]");
   const id=s?+s.dataset.i:r?+r.dataset.r:null;if(id===null)return;
   const c=queue.find(x=>x.id===id);
