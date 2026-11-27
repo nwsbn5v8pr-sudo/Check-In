@@ -6,10 +6,14 @@ A simple, Apple-style customer check-in app for iPhone and iPad.
 - **Up Next** shows each customer's location, wait time, and tags like **Ready to pay**.
 - Follows the device's light/dark mode.
 
-## Privacy
+## Sync and privacy
 
-Customer info is stored only in the browser on the device using the app — nothing is sent to a server.
-Each customer is deleted automatically **1 hour after check-in** (or immediately with Help, Remove or Clear All).
+Up Next is shared by every device through Supabase. Each device asks for the **store passcode** once.
+The passcode is not in this repo — ask the store manager.
+
+- The Supabase tables (`ci_checkins`, `ci_store`) are locked. The app can only use the `ci_*` functions, and every one checks the passcode.
+- Each customer is deleted automatically **1 hour after check-in**, by a scheduled job in Supabase, even if no device is open. **Helped**, **Remove** and **Clear All** delete right away.
+- Customer info is no longer kept on the device itself.
 
 ## Install on iPhone or iPad
 

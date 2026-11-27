@@ -36,6 +36,10 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 h1{font-size:clamp(28px,4vw,40px);line-height:1.05;margin:0;letter-spacing:-.02em;font-weight:700}
 .live{display:inline-flex;align-items:center;gap:7px;background:var(--greenSoft);color:var(--green);font-weight:600;font-size:15px;padding:6px 14px;border-radius:99px}
+.live.off{background:var(--field);color:var(--sub)}.live.off i{background:var(--sub);animation:none}
+#pm{z-index:20}#pm .box input{margin:4px 0 6px;text-align:center}
+#pm .box button{width:100%;margin-top:6px}
+.perr{color:var(--red)!important;font-size:14px;min-height:20px;margin:4px 0 0!important}
 .live i{width:9px;height:9px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 @keyframes pulse{50%{opacity:.35}}
 .stats{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -170,7 +174,7 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
 <body>
 <div class="wrap">
 <header>
-  <div class="ttl"><h1 class="sr">Check-In</h1><span class="live"><i></i>Live</span>
+  <div class="ttl"><h1 class="sr">Check-In</h1><span class="live off" id="live"><i></i><span id="liveT">Connecting</span></span>
     <div class="stats">
       <div class="stat"><b id="sW">0</b><span>Waiting</span></div>
       <div class="stat"><b id="sA">0:00</b><span>Avg Wait</span></div>
@@ -233,7 +237,7 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
 <section class="card">
   <div class="qh"><h2>Up Next</h2><button class="clr" id="clr" type="button">Clear All</button></div>
   <ul id="list"></ul>
-  <p class="hint">Swipe a customer right to move them to the top. Customer info is deleted 1 hour after check-in.</p>
+  <p class="hint">Swipe a customer right to move them to the top. Up Next is shared across all devices, and customer info is deleted 1 hour after check-in.</p>
 </section>
 </main>
 </div>
@@ -250,6 +254,12 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
     <div class="lq">Number</div><div class="lchips l6" id="lN"></div>
     <button type="button" class="lclear" id="lX">Remove location</button>
     <div class="b"><button id="lC" type="button" style="background:var(--field);color:var(--ink)">Cancel</button><button id="lS" type="button" style="background:var(--blue);color:#fff">Save</button></div>
+  </div>
+</div>
+<div class="modal" id="pm" role="dialog" aria-modal="true" aria-labelledby="pt">
+  <div class="box"><h3 id="pt">Enter store passcode</h3><p>Up Next is shared by every device in the store. You only need to enter this once on each device.</p>
+    <form id="pf" autocomplete="off"><input id="pc" type="password" placeholder="Passcode" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="Store passcode">
+    <p class="perr" id="perr"></p><button id="pu" type="submit" style="background:var(--blue);color:#fff">Unlock</button></form>
   </div>
 </div>
 <div class="toast" id="t"></div>
@@ -289,14 +299,74 @@ const noPay=()=>state.product==="Apple Home";
 const noAdd=()=>["Trade-in","Apple Home","Accessories"].includes(state.product);
 
 let state={product:"",model:"",model2:"",addon:"",pay:""};
-let queue=[];
-try{queue=JSON.parse(localStorage.getItem("ci-queue")||"[]")}catch(e){}
-// Privacy: customer info is deleted 1 hour after check-in
+// Privacy: customer info is deleted 1 hour after check-in (Supabase also deletes it on its own)
 const MAX_AGE=60*60*1000;
 const fresh=c=>Date.now()-c.t<MAX_AGE;
-if(!Array.isArray(queue))queue=[];
-queue=queue.filter(fresh);
-const save=()=>{try{if(queue.length)localStorage.setItem("ci-queue",JSON.stringify(queue));else localStorage.removeItem("ci-queue")}catch(e){}};
+let queue=[];
+
+// ---- Shared Up Next list (Supabase) ----
+// The publishable key is meant to be public. The tables are locked; every
+// call goes through ci_* functions that check the store passcode.
+const SB_URL="https://bkmpqjoqcilicmfahemg.supabase.co";
+const SB_KEY="sb_publishable_ss_a29uxD1FZWZ0at6uk_Q_a55sCjRg";
+let code="";try{code=localStorage.getItem("ci-code")||""}catch(e){}
+let pending=0,pulling=false,lastSig="";
+async function rpc(fn,args){
+  const r=await fetch(`${SB_URL}/rest/v1/rpc/${fn}`,{method:"POST",cache:"no-store",
+    headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(Object.assign({p_code:code},args||{}))});
+  if(!r.ok){let j={};try{j=await r.json()}catch(_){};const e=new Error(j.message||("HTTP "+r.status));e.bad=j.code==="28P01";throw e}
+  const t=await r.text();return t?JSON.parse(t):null;
+}
+function setOnline(on){$("live").classList.toggle("off",!on);$("liveT").textContent=on?"Live":"Offline"}
+const sigOf=q=>JSON.stringify(q.map(c=>[c.id,c.spot,c.name]));
+const fromRow=(r,now)=>({id:r.id,t:now-r.age_ms,name:r.name,color:r.color||"",clothing:r.clothing||"",spot:r.spot||"",
+  product:r.product||"",model:r.model||"",model2:r.model2||"",addon:r.addon||"",pay:r.pay||""});
+async function pullList(){
+  if(!code||pulling||pending||document.hidden)return;pulling=true;
+  try{
+    const rows=await rpc("ci_list");setOnline(true);
+    if(pending)return;
+    const now=Date.now(),next=(rows||[]).map(r=>fromRow(r,now));
+    for(const c of next){const o=queue.find(x=>x.id===c.id);if(o&&Math.abs(o.t-c.t)<5000)c.t=o.t}
+    queue=next;
+    if(sigOf(queue)!==lastSig&&!sw&&!le)render();else tick();
+  }catch(e){if(e.bad)lock(true);else setOnline(false)}
+  finally{pulling=false}
+}
+// Send a change to Supabase, then refresh from the shared list
+async function op(fn,args){
+  pending++;
+  try{await rpc(fn,args);setOnline(true)}
+  catch(e){if(e.bad)lock(true);else{setOnline(false);toast("Couldn’t sync — check Wi-Fi")}}
+  finally{pending--;pullList()}
+}
+const synced=id=>!String(id).startsWith("tmp");
+// One time: move customers saved on this device (older version) into the shared list
+async function moveLocalList(){
+  let old=[];try{old=JSON.parse(localStorage.getItem("ci-queue")||"[]")}catch(e){}
+  if(!Array.isArray(old))old=[];
+  old=old.filter(c=>c&&c.name&&fresh(c));
+  try{
+    for(const c of old)await rpc("ci_add",{p:{name:c.name,color:c.color,clothing:c.clothing,spot:c.spot,product:c.product,
+      model:c.model,model2:c.model2,addon:c.addon,pay:c.pay,age_ms:Date.now()-c.t}});
+    localStorage.removeItem("ci-queue");
+  }catch(e){}
+}
+function lock(bad){
+  if(bad){code="";try{localStorage.removeItem("ci-code")}catch(e){}}
+  queue=[];render();setOnline(false);
+  $("perr").textContent=bad?"That passcode didn’t work. Try again.":"";
+  $("pm").classList.add("on");setTimeout(()=>$("pc").focus(),50);
+}
+$("pf").addEventListener("submit",async e=>{
+  e.preventDefault();const v=$("pc").value.trim();if(!v)return;
+  $("pu").disabled=true;$("pu").textContent="Checking…";$("perr").textContent="";
+  const prev=code;code=v;
+  try{await rpc("ci_list");try{localStorage.setItem("ci-code",v)}catch(_){}
+    $("pm").classList.remove("on");$("pc").value="";setOnline(true);await moveLocalList();pullList();toast("Connected to Up Next")}
+  catch(err){code=prev;$("perr").textContent=err.bad?"That passcode didn’t work. Try again.":"Can’t reach Up Next. Check Wi-Fi and try again."}
+  finally{$("pu").disabled=false;$("pu").textContent="Unlock"}
+});
 
 $("col").innerHTML+=COLORS.map(([n])=>`<option>${n}</option>`).join("");
 $("clo").innerHTML+=CLOTHES.map(n=>`<option>${n}</option>`).join("");
@@ -399,7 +469,7 @@ const esc=s=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&q
 
 function render(){
   $("clr").disabled=!queue.length;
-  if(!queue.length){$("list").innerHTML=`<li class="empty">No customers waiting</li>`;tick();return}
+  if(!queue.length){$("list").innerHTML=`<li class="empty">No customers waiting</li>`;lastSig=sigOf(queue);tick();return}
   $("list").innerHTML=queue.map((c,i)=>{
     const col=COLORS.find(x=>x[0]===c.color);
     const wear=[c.color,c.clothing].filter(Boolean).join(" ");
@@ -408,11 +478,11 @@ function render(){
       <div class="meta">${wear?`<span>${col?`<span class="dot" style="background:${col[1]}"></span>`:""}${esc(wear)}</span>`:""}</div>
       <div class="tags">${c.product==="Trade-in"||c.product==="Apple Home"||(c.product==="Accessories"&&c.pay==="Other")||(c.addon!=="Trade-in"&&c.addon!=="Screen protector"&&c.pay==="Pay in full")?`<span class="tag rdy">Ready to pay</span>`:""}<span class="tag">${esc(phoneLabel(c.product,c.model,c.model2))}</span>${c.addon&&c.addon!=="None"?`<span class="tag">+ ${c.addon}</span>`:""}${c.pay&&c.pay!=="Other"?`<span class="tag ${c.pay==="Ways to Pay"||c.pay==="Finance"?"fin":""}">${c.pay}</span>`:""}</div>
     </div><div class="side"><span class="tm" data-t="${c.t}">0:00</span><button class="srv" data-i="${c.id}">Helped</button><button class="x" data-r="${c.id}" aria-label="Remove ${esc(c.name)}">Remove</button></div></div></li>`}).join("");
-  lastMoved=null;
+  lastMoved=null;lastSig=sigOf(queue);
   tick();
 }
 function tick(){
-  if(queue.some(c=>!fresh(c))){queue=queue.filter(fresh);save();render();return}
+  if(queue.some(c=>!fresh(c))){queue=queue.filter(fresh);render();return}
   const now=Date.now(),w=queue.map(c=>now-c.t);
   $("sW").textContent=queue.length;
   $("sA").textContent=fmt(w.length?w.reduce((a,b)=>a+b,0)/w.length:0);
@@ -426,8 +496,9 @@ $("f").addEventListener("submit",e=>{
   const name=$("fn").value.trim()+($("li").value.trim()?" "+$("li").value.trim().toUpperCase().replace(/\.?$/,"."):"");
   const l=$("loc").value,n=$("num").value;
   const locName=(LOCS.find(x=>x[1]===l)||[""])[0];
-  queue.push({id:Date.now()+Math.random(),t:Date.now(),name,color:$("col").value,clothing:$("clo").value,spot:l?l+n:"",product:state.product,model:needsModel()?state.model:"",model2:isMulti()?state.model2:"",addon:noAdd()?"":state.addon,pay:noPay()?"":state.pay});
-  save();render();
+  const rec={name,color:$("col").value,clothing:$("clo").value,spot:l?l+n:"",product:state.product,model:needsModel()?state.model:"",model2:isMulti()?state.model2:"",addon:noAdd()?"":state.addon,pay:noPay()?"":state.pay};
+  queue.push(Object.assign({id:"tmp"+Date.now(),t:Date.now()},rec));render();
+  op("ci_add",{p:rec});
   toast(`${name} checked in`);
   resetForm();
   if(isIOS())closeSheet();else $("fn").focus();
@@ -437,7 +508,8 @@ $("f").addEventListener("submit",e=>{
 let lastMoved=null,sw=null;const ARM=120;
 function moveTop(id){
   const i=queue.findIndex(x=>x.id===id);if(i<0)return;
-  const [c]=queue.splice(i,1);queue.unshift(c);lastMoved=id;save();render();
+  const [c]=queue.splice(i,1);queue.unshift(c);lastMoved=id;render();
+  if(i>0&&synced(id))op("ci_move_top",{p_id:id});
   toast(i===0?`${c.name} is already first`:`${c.name} moved to the top`);
 }
 $("list").addEventListener("pointerdown",e=>{
@@ -463,7 +535,7 @@ function endSwipe(e){
   const s=sw;sw=null;if(!s.on)return;
   s.ci.classList.remove("drag");s.ci.style.transform="";
   const go=s.li.classList.contains("arm");
-  if(go)setTimeout(()=>moveTop(+s.li.dataset.id),180);
+  if(go)setTimeout(()=>moveTop(s.li.dataset.id),180);
   else setTimeout(()=>s.li.classList.remove("sw"),250);
 }
 $("list").addEventListener("pointerup",endSwipe);
@@ -491,21 +563,24 @@ $("lC").addEventListener("click",closeLoc);
 $("lm").addEventListener("click",e=>{if(e.target.id==="lm")closeLoc()});
 $("lS").addEventListener("click",()=>{
   const c=queue.find(x=>x.id===le.id);
-  if(c){const old=c.spot;c.spot=le.l?le.l+le.n:"";save();render();if(old!==c.spot)toast(c.spot?`${c.name} moved to ${c.spot}`:`Location removed for ${c.name}`)}
+  if(c){const old=c.spot;c.spot=le.l?le.l+le.n:"";
+    if(old!==c.spot&&synced(c.id))op("ci_set_spot",{p_id:c.id,p_spot:c.spot});
+    le=null;render();if(old!==c.spot)toast(c.spot?`${c.name} moved to ${c.spot}`:`Location removed for ${c.name}`)}
   closeLoc();
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&le)closeLoc()});
 $("list").addEventListener("click",e=>{
-  const lb=e.target.closest("[data-loc]");if(lb){openLoc(+lb.dataset.loc);return}
+  const lb=e.target.closest("[data-loc]");if(lb){openLoc(lb.dataset.loc);return}
   const s=e.target.closest("[data-i]"),r=e.target.closest("[data-r]");
-  const id=s?+s.dataset.i:r?+r.dataset.r:null;if(id===null)return;
+  const id=s?s.dataset.i:r?r.dataset.r:null;if(id===null)return;
   const c=queue.find(x=>x.id===id);
-  queue=queue.filter(x=>x.id!==id);save();render();
+  queue=queue.filter(x=>x.id!==id);render();
+  if(synced(id))op("ci_remove",{p_id:id});
   if(s&&c)toast(`${c.name} helped`);
 });
 $("clr").addEventListener("click",()=>$("m").classList.add("on"));
 $("mN").addEventListener("click",()=>$("m").classList.remove("on"));
-$("mY").addEventListener("click",()=>{queue=[];save();render();$("m").classList.remove("on")});
+$("mY").addEventListener("click",()=>{queue=[];render();$("m").classList.remove("on");op("ci_clear")});
 $("m").addEventListener("click",e=>{if(e.target.id==="m")$("m").classList.remove("on")});
 
 function setTC(){const d=document.documentElement.dataset.theme;const dark=d?d==="dark":matchMedia("(prefers-color-scheme: dark)").matches;$("tc").content=dark?"#000000":"#f5f5f7"}
@@ -513,8 +588,12 @@ try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",setTC)}
 $("fn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("li").focus()}});
 $("li").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("li").blur()}});
 setTC();
-save();steps();preview();sync();render();
+steps();preview();sync();render();
 const ticker=setInterval(tick,1000);
+const poller=setInterval(pullList,4000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)pullList()});
+window.addEventListener("online",pullList);
+if(code){moveLocalList().then(pullList)}else lock(false);
 }
 </script>
 </body>
