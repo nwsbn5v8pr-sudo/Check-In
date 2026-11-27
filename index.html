@@ -37,9 +37,6 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 h1{font-size:clamp(28px,4vw,40px);line-height:1.05;margin:0;letter-spacing:-.02em;font-weight:700}
 .live{display:inline-flex;align-items:center;gap:7px;background:var(--greenSoft);color:var(--green);font-weight:600;font-size:15px;padding:6px 14px;border-radius:99px}
 .live.off{background:var(--field);color:var(--sub)}.live.off i{background:var(--sub);animation:none}
-#pm{z-index:20}#pm .box input{margin:4px 0 6px;text-align:center}
-#pm .box button{width:100%;margin-top:6px}
-.perr{color:var(--red)!important;font-size:14px;min-height:20px;margin:4px 0 0!important}
 .live i{width:9px;height:9px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 @keyframes pulse{50%{opacity:.35}}
 .stats{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -256,12 +253,6 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
     <div class="b"><button id="lC" type="button" style="background:var(--field);color:var(--ink)">Cancel</button><button id="lS" type="button" style="background:var(--blue);color:#fff">Save</button></div>
   </div>
 </div>
-<div class="modal" id="pm" role="dialog" aria-modal="true" aria-labelledby="pt">
-  <div class="box"><h3 id="pt">Enter store passcode</h3><p>Up Next is shared by every device in the store. You only need to enter this once on each device.</p>
-    <form id="pf" autocomplete="off"><input id="pc" type="password" placeholder="Passcode" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="Store passcode">
-    <p class="perr" id="perr"></p><button id="pu" type="submit" style="background:var(--blue);color:#fff">Unlock</button></form>
-  </div>
-</div>
 <div class="toast" id="t"></div>
 
 <script>
@@ -306,15 +297,15 @@ let queue=[];
 
 // ---- Shared Up Next list (Supabase) ----
 // The publishable key is meant to be public. The tables are locked; every
-// call goes through ci_* functions that check the store passcode.
+// call goes through the ci_* functions. (No passcode — removed by request.)
 const SB_URL="https://bkmpqjoqcilicmfahemg.supabase.co";
 const SB_KEY="sb_publishable_ss_a29uxD1FZWZ0at6uk_Q_a55sCjRg";
-let code="";try{code=localStorage.getItem("ci-code")||""}catch(e){}
+try{localStorage.removeItem("ci-code")}catch(e){}
 let pending=0,pulling=false,lastSig="";
 async function rpc(fn,args){
   const r=await fetch(`${SB_URL}/rest/v1/rpc/${fn}`,{method:"POST",cache:"no-store",
-    headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(Object.assign({p_code:code},args||{}))});
-  if(!r.ok){let j={};try{j=await r.json()}catch(_){};const e=new Error(j.message||("HTTP "+r.status));e.bad=j.code==="28P01";throw e}
+    headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(Object.assign({p_code:""},args||{}))});
+  if(!r.ok){let j={};try{j=await r.json()}catch(_){};throw new Error(j.message||("HTTP "+r.status))}
   const t=await r.text();return t?JSON.parse(t):null;
 }
 function setOnline(on){$("live").classList.toggle("off",!on);$("liveT").textContent=on?"Live":"Offline"}
@@ -322,7 +313,7 @@ const sigOf=q=>JSON.stringify(q.map(c=>[c.id,c.spot,c.name]));
 const fromRow=(r,now)=>({id:r.id,t:now-r.age_ms,name:r.name,color:r.color||"",clothing:r.clothing||"",spot:r.spot||"",
   product:r.product||"",model:r.model||"",model2:r.model2||"",addon:r.addon||"",pay:r.pay||""});
 async function pullList(){
-  if(!code||pulling||pending||document.hidden)return;pulling=true;
+  if(pulling||pending||document.hidden)return;pulling=true;
   try{
     const rows=await rpc("ci_list");setOnline(true);
     if(pending)return;
@@ -330,14 +321,14 @@ async function pullList(){
     for(const c of next){const o=queue.find(x=>x.id===c.id);if(o&&Math.abs(o.t-c.t)<5000)c.t=o.t}
     queue=next;
     if(sigOf(queue)!==lastSig&&!sw&&!le)render();else tick();
-  }catch(e){if(e.bad)lock(true);else setOnline(false)}
+  }catch(e){setOnline(false)}
   finally{pulling=false}
 }
 // Send a change to Supabase, then refresh from the shared list
 async function op(fn,args){
   pending++;
   try{await rpc(fn,args);setOnline(true)}
-  catch(e){if(e.bad)lock(true);else{setOnline(false);toast("Couldn’t sync — check Wi-Fi")}}
+  catch(e){setOnline(false);toast("Couldn’t sync — check Wi-Fi")}
   finally{pending--;pullList()}
 }
 const synced=id=>!String(id).startsWith("tmp");
@@ -352,21 +343,6 @@ async function moveLocalList(){
     localStorage.removeItem("ci-queue");
   }catch(e){}
 }
-function lock(bad){
-  if(bad){code="";try{localStorage.removeItem("ci-code")}catch(e){}}
-  queue=[];render();setOnline(false);
-  $("perr").textContent=bad?"That passcode didn’t work. Try again.":"";
-  $("pm").classList.add("on");setTimeout(()=>$("pc").focus(),50);
-}
-$("pf").addEventListener("submit",async e=>{
-  e.preventDefault();const v=$("pc").value.trim();if(!v)return;
-  $("pu").disabled=true;$("pu").textContent="Checking…";$("perr").textContent="";
-  const prev=code;code=v;
-  try{await rpc("ci_list");try{localStorage.setItem("ci-code",v)}catch(_){}
-    $("pm").classList.remove("on");$("pc").value="";setOnline(true);await moveLocalList();pullList();toast("Connected to Up Next")}
-  catch(err){code=prev;$("perr").textContent=err.bad?"That passcode didn’t work. Try again.":"Can’t reach Up Next. Check Wi-Fi and try again."}
-  finally{$("pu").disabled=false;$("pu").textContent="Unlock"}
-});
 
 $("col").innerHTML+=COLORS.map(([n])=>`<option>${n}</option>`).join("");
 $("clo").innerHTML+=CLOTHES.map(n=>`<option>${n}</option>`).join("");
@@ -593,7 +569,7 @@ const ticker=setInterval(tick,1000);
 const poller=setInterval(pullList,4000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)pullList()});
 window.addEventListener("online",pullList);
-if(code){moveLocalList().then(pullList)}else lock(false);
+moveLocalList().then(pullList);
 }
 </script>
 </body>

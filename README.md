@@ -8,10 +8,10 @@ A simple, Apple-style customer check-in app for iPhone and iPad.
 
 ## Sync and privacy
 
-Up Next is shared by every device through Supabase. Each device asks for the **store passcode** once.
-The passcode is not in this repo — ask the store manager.
+Up Next is shared by every device through Supabase — just open the app, no passcode.
 
-- The Supabase tables (`ci_checkins`, `ci_store`) are locked. The app can only use the `ci_*` functions, and every one checks the passcode.
+- The Supabase tables (`ci_checkins`, `ci_store`) are locked; the app can only use the `ci_*` functions.
+- There is no passcode, so anyone who has the app's link can see and change Up Next.
 - Each customer is deleted automatically **1 hour after check-in**, by a scheduled job in Supabase, even if no device is open. **Helped**, **Remove** and **Clear All** delete right away.
 - Customer info is no longer kept on the device itself.
 
