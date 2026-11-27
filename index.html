@@ -222,13 +222,13 @@ html.ios.has-mini .wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom))
     <div class="grid2" id="pay" role="group" aria-label="Payment"></div>
   </div>
 
-  <button class="go" id="go" type="submit" disabled>Check In</button>
+  <button class="go" id="go" type="submit" disabled>+ Up Next</button>
   <p class="hint" id="hint">Add a first name and choose a product</p>
 </form>
 </div>
 </div>
 
-<button class="fab" id="fab" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+<button class="fab" id="fab" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Up Next</button>
 <button class="mini" id="mini" type="button" aria-label="Continue this check-in"><span class="mi-t"><b id="miN">New check-in</b><small id="miS">In progress</small></span><span class="mi-go">Continue<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></span></button>
 <section class="card">
   <div class="qh"><h2>Up Next</h2><button class="clr" id="clr" type="button">Clear All</button></div>
@@ -337,7 +337,7 @@ function sync(){
   const name=$("fn").value.trim();
   const ok=name&&state.product&&modelsDone()&&(noPay()||((state.addon||noAdd())&&state.pay));
   $("go").disabled=!ok;
-  $("hint").textContent=ok?"Ready to check in":!name?"Add a first name":!state.product?"Choose a product":(needsModel()&&!state.model)?(isMulti()?"Choose the first iPhone":"Choose an iPhone model"):(isMulti()&&!state.model2)?"Choose the second iPhone":(!state.addon&&!noAdd())?"Choose trade-in or none":isTrade()?"Choose stand alone or previous purchase":isAcc()?"Choose AirPods Try On or Other":"Choose how they’ll pay";
+  $("hint").textContent=ok?"Ready to add to Up Next":!name?"Add a first name":!state.product?"Choose a product":(needsModel()&&!state.model)?(isMulti()?"Choose the first iPhone":"Choose an iPhone model"):(isMulti()&&!state.model2)?"Choose the second iPhone":(!state.addon&&!noAdd())?"Choose trade-in or none":isTrade()?"Choose stand alone or previous purchase":isAcc()?"Choose AirPods Try On or Other":"Choose how they’ll pay";
 }
 $("f").addEventListener("click",e=>{
   const b=e.target.closest(".opt");if(!b)return;
